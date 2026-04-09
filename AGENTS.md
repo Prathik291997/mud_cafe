@@ -1,5 +1,5 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
+# Mudcup — agent notes
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
+- **Frontend**: `frontend/` — React 19 + Vite + TypeScript + React Router. API base URL: `VITE_API_URL` (default `http://127.0.0.1:8000/api`).
+- **Backend**: `backend/` — Django 5 + Django REST Framework + SimpleJWT. Run `python manage.py runserver` from `backend/` after `migrate` and `seed_demo`.
+- Staff auth: `POST /api/auth/login/` with `{"email","password"}`; send `Authorization: Bearer <access>` on protected routes.

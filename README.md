@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mudcup
 
-## Getting Started
+Café stack: **React (Vite)** frontend and **Django REST** backend. Table QR ordering, payments, manager ETA, admin reports, offers, and email subscribers.
 
-First, run the development server:
+## Prerequisites
+
+- Python 3.11+ (3.14 works here with Django 5.2)
+- Node.js 20+
+
+## Backend (Django)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd backend
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+pip install -r requirements.txt
+copy .env.example .env          # optional
+python manage.py migrate
+python manage.py seed_demo
+python manage.py runserver 8000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+API base: `http://127.0.0.1:8000/api/`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- JWT login: `POST /api/auth/login/` with JSON `{"email":"...","password":"..."}` (field name is `email`).
+- Adjust `CORS_ALLOWED_ORIGINS` in `.env` if the React dev server uses another port.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Demo accounts
 
-## Learn More
+| Role    | Email                 | Password   |
+|---------|----------------------|------------|
+| Admin   | `admin@mudcup.local` | `admin123` |
+| Manager | `manager@mudcup.local` | `manager123` |
 
-To learn more about Next.js, take a look at the following resources:
+### Customer flow (app)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Home → **Customer** → allow camera → scan **table QR** (opens menu for that table).
+2. Add items → **Review order** → **Continue to payment** (order is created server-side).
+3. **Scan the payment QR** with your UPI app (or pay using the UPI ID), then tap **I’ve paid — confirm order**.
+4. Leave a review / offer opt-in if you like.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Configure the payment QR: set **`MUDCUP_UPI_PA`** (and optionally **`MUDCUP_UPI_PAYEE_NAME`**) in the Django environment, or **`VITE_UPI_PA`** on the frontend build. Without this, the app shows manual-pay instructions only.
 
-## Deploy on Vercel
+### Table ordering QRs (admin)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+In **Admin → Tables & QR codes** you can add tables (Table 1, 2, 3, …), **download/preview a QR** that encodes `{FRONTEND_PUBLIC_URL}/t/{token}`, or **upload your own QR image** (e.g. from a designer). Set **`FRONTEND_PUBLIC_URL`** in the Django `.env` to your live customer site so printed codes open the correct host. Orders still use the same `qr_token` → correct table in the API.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Frontend (React + Vite)
+
+```bash
+cd frontend
+npm install
+copy .env.example .env          # optional; default API is http://127.0.0.1:8000/api
+npm run dev
+```
+
+Open `http://localhost:5173`.
+
+If port **8000** is already used on your machine (common on Windows), run Django on another port, e.g. `runserver 8080`, and set:
+
+```env
+VITE_API_URL=http://127.0.0.1:8080/api
+```
+
+## Root shortcuts (optional)
+
+From the repo root:
+
+```bash
+npm run dev:api    # Django on 8000
+npm run dev:web    # Vite on 5173
+npm run build:web  # production build → frontend/dist
+```
+
+## Project layout
+
+- `backend/` — Django project `mudcup`, app `cafe`, SQLite `db.sqlite3`
+- `frontend/` — React SPA, calls the API with `Authorization: Bearer <access>`
+
+Offer emails use Django’s email backend (console in dev). Configure SMTP via `EMAIL_*` settings in `mudcup/settings.py` / environment as needed.
