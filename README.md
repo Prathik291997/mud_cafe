@@ -78,3 +78,57 @@ npm run build:web  # production build → frontend/dist
 - `frontend/` — React SPA, calls the API with `Authorization: Bearer <access>`
 
 Offer emails use Django’s email backend (console in dev). Configure SMTP via `EMAIL_*` settings in `mudcup/settings.py` / environment as needed.
+
+## Free Hosting (Render + Vercel + Neon)
+
+Recommended free deployment:
+
+- Backend API (`backend/`) on **Render**
+- Frontend (`frontend/`) on **Vercel**
+- Database on **Neon Postgres**
+
+### 1) Neon database
+
+- Create a free Neon project and copy the connection string.
+- Set it in backend env as `DATABASE_URL`.
+
+### 2) Render backend
+
+- Create a new **Web Service** from this GitHub repo.
+- Root directory: `backend`
+- Build command:
+
+```bash
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py seed_demo
+python manage.py collectstatic --noinput
+```
+
+- Start command:
+
+```bash
+gunicorn mudcup.wsgi:application
+```
+
+- Required Render environment variables:
+  - `DJANGO_SECRET_KEY=<long-random-secret>`
+  - `DJANGO_DEBUG=0`
+  - `DJANGO_ALLOWED_HOSTS=<your-render-service>.onrender.com`
+  - `CORS_ALLOWED_ORIGINS=https://<your-vercel-app>.vercel.app`
+  - `DATABASE_URL=<your-neon-postgres-url>`
+  - `FRONTEND_PUBLIC_URL=https://<your-vercel-app>.vercel.app`
+  - Optional: `MUDCUP_UPI_PA`, `MUDCUP_UPI_PAYEE_NAME`
+
+### 3) Vercel frontend
+
+- Import same GitHub repo into Vercel.
+- Root directory: `frontend`
+- Add environment variable:
+  - `VITE_API_URL=https://<your-render-service>.onrender.com/api`
+- Deploy.
+
+### 4) Notes
+
+- Render free instances may sleep when idle (first request can be slow).
+- Camera QR scan requires HTTPS in production (Vercel provides HTTPS).
