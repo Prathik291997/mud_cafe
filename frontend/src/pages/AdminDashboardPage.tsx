@@ -9,6 +9,7 @@ type MenuItem = {
   description: string | null;
   price: string;
   supplierName: string | null;
+  imageUrl?: string | null;
   active: boolean;
   sortOrder: number;
 };
@@ -54,6 +55,7 @@ export function AdminDashboardPage() {
   const [offers, setOffers] = useState<{ id: number; title: string; body: string; releasedAt: string | null }[]>([]);
   const [combos, setCombos] = useState<ComboRow[]>([]);
   const [form, setForm] = useState({ name: "", price: "", supplierName: "", description: "" });
+  const [menuImage, setMenuImage] = useState<File | null>(null);
   const [offerForm, setOfferForm] = useState({ title: "", body: "" });
   const [comboForm, setComboForm] = useState({ title: "", description: "", originalPrice: "", comboPrice: "" });
   const [tables, setTables] = useState<AdminTableRow[]>([]);
@@ -134,16 +136,15 @@ export function AdminDashboardPage() {
     e.preventDefault();
     const price = Number(form.price);
     if (!form.name || Number.isNaN(price)) return;
-    await apiFetch("/admin/menu/", {
-      method: "POST",
-      body: JSON.stringify({
-        name: form.name,
-        price,
-        supplierName: form.supplierName || undefined,
-        description: form.description || undefined,
-      }),
-    });
+    const fd = new FormData();
+    fd.append("name", form.name);
+    fd.append("price", String(price));
+    if (form.supplierName.trim()) fd.append("supplierName", form.supplierName.trim());
+    if (form.description.trim()) fd.append("description", form.description.trim());
+    if (menuImage) fd.append("image", menuImage);
+    await apiFetch("/admin/menu/", { method: "POST", body: fd });
     setForm({ name: "", price: "", supplierName: "", description: "" });
+    setMenuImage(null);
     void load();
   }
 
@@ -175,6 +176,27 @@ export function AdminDashboardPage() {
         description: description.trim() || null,
       }),
     });
+    void load();
+  }
+
+  async function uploadMenuImage(itemId: number, file: File | null) {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("image", file);
+    const res = await apiFetch(`/admin/menu/${itemId}/`, { method: "PATCH", body: fd });
+    if (!res.ok) {
+      alert("Image upload failed");
+      return;
+    }
+    void load();
+  }
+
+  async function clearMenuImage(itemId: number) {
+    const res = await apiFetch(`/admin/menu/${itemId}/`, { method: "PATCH", body: JSON.stringify({ clearImage: true }) });
+    if (!res.ok) {
+      alert("Could not remove image");
+      return;
+    }
     void load();
   }
 
@@ -495,6 +517,14 @@ export function AdminDashboardPage() {
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
           />
+          <label className="full tiny muted">
+            Menu image (optional)
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setMenuImage(e.target.files?.[0] ?? null)}
+            />
+          </label>
           <button type="submit" className="btn btn-primary full">
             Add menu item
           </button>
@@ -513,7 +543,12 @@ export function AdminDashboardPage() {
             <tbody>
               {menu.map((it) => (
                 <tr key={it.id}>
-                  <td>{it.name}</td>
+                  <td>
+                    <div className="menu-admin-name">
+                      {it.imageUrl ? <img src={it.imageUrl} alt={it.name} className="menu-thumb" /> : null}
+                      <span>{it.name}</span>
+                    </div>
+                  </td>
                   <td>{it.supplierName ?? "—"}</td>
                   <td>Rs {it.price}</td>
                   <td>{it.active ? "Yes" : "No"}</td>
@@ -524,6 +559,24 @@ export function AdminDashboardPage() {
                     <button type="button" className="linkish" onClick={() => void editMenuItem(it)}>
                       Edit
                     </button>{" "}
+                    <label className="file-upload-label">
+                      Upload image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = "";
+                          void uploadMenuImage(it.id, f ?? null);
+                        }}
+                      />
+                    </label>{" "}
+                    {it.imageUrl && (
+                      <button type="button" className="linkish" onClick={() => void clearMenuImage(it.id)}>
+                        Remove image
+                      </button>
+                    )}{" "}
                     <button type="button" className="linkish danger" onClick={() => void deleteItem(it.id)}>
                       Delete
                     </button>

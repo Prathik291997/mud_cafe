@@ -4,7 +4,14 @@ import QRCode from "react-qr-code";
 import { apiFetch } from "../lib/api";
 import { buildUpiPayUri } from "../lib/upi";
 
-type MenuItem = { id: number; name: string; description: string | null; price: string; supplierName: string | null };
+type MenuItem = {
+  id: number;
+  name: string;
+  description: string | null;
+  price: string;
+  supplierName: string | null;
+  imageUrl?: string | null;
+};
 type PublicOffer = { id: number; title: string; body: string; releasedAt: string | null };
 type PublicCombo = {
   id: number;
@@ -273,6 +280,7 @@ export function TablePage() {
             {menu.map((m) => (
               <li key={m.id} className="menu-card">
                 <div className="menu-body">
+                  {m.imageUrl && <img src={m.imageUrl} alt={m.name} className="menu-item-image" />}
                   <p className="menu-name">{m.name}</p>
                   {m.description && <p className="muted small">{m.description}</p>}
                   {m.supplierName && <p className="supplier">{m.supplierName}</p>}

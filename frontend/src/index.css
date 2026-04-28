@@ -859,6 +859,30 @@ form.table-add-form {
   margin: 0;
 }
 
+.menu-item-image {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 0.6rem;
+  border: 1px solid #fed7aa;
+  margin-bottom: 0.45rem;
+}
+
+.menu-admin-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.menu-thumb {
+  width: 38px;
+  height: 38px;
+  object-fit: cover;
+  border-radius: 0.45rem;
+  border: 1px solid #fdba74;
+  background: #fff;
+}
+
 .supplier {
   font-size: 0.65rem;
   text-transform: uppercase;

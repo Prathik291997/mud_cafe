@@ -4,8 +4,8 @@ import { apiFetch, clearTokens, readApiError, setTokens } from "../lib/api";
 
 export function ManagerLoginPage() {
   const nav = useNavigate();
-  const [email, setEmail] = useState("manager@mudcup.local");
-  const [password, setPassword] = useState("manager123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
