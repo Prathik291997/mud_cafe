@@ -5,6 +5,15 @@ import { apiFetch } from "../lib/api";
 import { buildUpiPayUri } from "../lib/upi";
 
 type MenuItem = { id: number; name: string; description: string | null; price: string; supplierName: string | null };
+type PublicOffer = { id: number; title: string; body: string; releasedAt: string | null };
+type PublicCombo = {
+  id: number;
+  title: string;
+  description: string;
+  originalPrice: string;
+  comboPrice: string;
+  releasedAt: string | null;
+};
 
 type PayConfig = { upiPa: string; payeeName: string };
 
@@ -13,6 +22,8 @@ export function TablePage() {
   const [table, setTable] = useState<{ number: number; label: string | null } | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ok" | "bad">("loading");
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [offers, setOffers] = useState<PublicOffer[]>([]);
+  const [combos, setCombos] = useState<PublicCombo[]>([]);
   const [cart, setCart] = useState<Record<number, number>>({});
   const [step, setStep] = useState<"menu" | "review" | "pay" | "done">("menu");
   const [orderId, setOrderId] = useState<number | null>(null);
@@ -35,9 +46,12 @@ export function TablePage() {
     }
     const tbl = (tr as { table: { number: number; label: string | null } }).table;
     setTable(tbl);
-    const mr = await apiFetch("/menu/", { auth: false });
+    const [mr, ar] = await Promise.all([apiFetch("/menu/", { auth: false }), apiFetch("/announcements/", { auth: false })]);
     const menuJson = await mr.json().catch(() => ({}));
     if (menuJson.items) setMenu(menuJson.items);
+    const annJson = await ar.json().catch(() => ({}));
+    if (annJson.offers) setOffers(annJson.offers);
+    if (annJson.combos) setCombos(annJson.combos);
     setLoadState("ok");
   }, []);
 
@@ -220,6 +234,41 @@ export function TablePage() {
 
       {step === "menu" && (
         <>
+          {(offers.length > 0 || combos.length > 0) && (
+            <section className="section">
+              <h2>Today's announcements</h2>
+              {offers.length > 0 && (
+                <>
+                  <p className="muted small">Offers</p>
+                  <ul className="offer-list">
+                    {offers.map((o) => (
+                      <li key={`offer-${o.id}`} className="offer-item">
+                        <span className="strong">{o.title}</span>
+                        <p className="small">{o.body}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {combos.length > 0 && (
+                <>
+                  <p className="muted small">Combo deals</p>
+                  <ul className="offer-list">
+                    {combos.map((c) => (
+                      <li key={`combo-${c.id}`} className="offer-item">
+                        <span className="strong">{c.title}</span>
+                        <p className="small">{c.description}</p>
+                        <p className="small">
+                          <span className="muted">Was Rs {c.originalPrice}</span> {" -> "} <strong>Now Rs {c.comboPrice}</strong>
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </section>
+          )}
+
           <ul className="menu-list">
             {menu.map((m) => (
               <li key={m.id} className="menu-card">

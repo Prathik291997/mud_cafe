@@ -10,37 +10,48 @@ class Command(BaseCommand):
     help = "Seed Mudcup demo staff, tables, and menu"
 
     def handle(self, *args, **options):
-        if not User.objects.filter(email="admin@mudcup.local").exists():
-            User.objects.create_user(
-                "admin@mudcup.local",
-                password="admin123",
-                role="ADMIN",
-                first_name="Cafe",
-                last_name="Admin",
-                is_staff=True,
-            )
-        else:
-            u = User.objects.get(email="admin@mudcup.local")
-            u.role = "ADMIN"
-            u.is_staff = True
-            u.set_password("admin123")
-            u.save()
+        fixed_staff = [
+            {
+                "email": "admin@mudcup.local",
+                "password": "admin123",
+                "role": "ADMIN",
+                "first_name": "Cafe",
+                "last_name": "Admin",
+            },
+            {
+                "email": "owner@mudcup.local",
+                "password": "owner123",
+                "role": "ADMIN",
+                "first_name": "Cafe",
+                "last_name": "Owner",
+            },
+            {
+                "email": "manager@mudcup.local",
+                "password": "manager123",
+                "role": "MANAGER",
+                "first_name": "Floor",
+                "last_name": "Manager",
+            },
+        ]
 
-        if not User.objects.filter(email="manager@mudcup.local").exists():
-            User.objects.create_user(
-                "manager@mudcup.local",
-                password="manager123",
-                role="MANAGER",
-                first_name="Floor",
-                last_name="Manager",
-                is_staff=True,
-            )
-        else:
-            u = User.objects.get(email="manager@mudcup.local")
-            u.role = "MANAGER"
-            u.is_staff = True
-            u.set_password("manager123")
-            u.save()
+        for s in fixed_staff:
+            if not User.objects.filter(email=s["email"]).exists():
+                User.objects.create_user(
+                    s["email"],
+                    password=s["password"],
+                    role=s["role"],
+                    first_name=s["first_name"],
+                    last_name=s["last_name"],
+                    is_staff=True,
+                )
+            else:
+                u = User.objects.get(email=s["email"])
+                u.role = s["role"]
+                u.is_staff = True
+                u.first_name = s["first_name"]
+                u.last_name = s["last_name"]
+                u.set_password(s["password"])
+                u.save()
 
         for n in range(1, 13):
             CafeTable.objects.update_or_create(
@@ -67,5 +78,9 @@ class Command(BaseCommand):
                 },
             )
 
-        self.stdout.write(self.style.SUCCESS("Seed OK — admin@mudcup.local / admin123, manager@mudcup.local / manager123"))
+        self.stdout.write(
+            self.style.SUCCESS(
+                "Seed OK — admin@mudcup.local / admin123, owner@mudcup.local / owner123, manager@mudcup.local / manager123"
+            )
+        )
         self.stdout.write("Table 1 path (frontend): /t/table-1-demo-token")

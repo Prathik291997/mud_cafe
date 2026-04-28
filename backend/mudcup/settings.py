@@ -77,6 +77,16 @@ if DATABASE_URL and not DATABASE_URL.startswith("file:"):
         conn_max_age=600,
         ssl_require=not DEBUG,
     )
+elif os.environ.get("POSTGRES_DB"):
+    # Optional explicit Postgres vars (useful when a platform doesn't provide DATABASE_URL)
+    DATABASES["default"] = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("POSTGRES_DB", ""),
+        "USER": os.environ.get("POSTGRES_USER", ""),
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
+        "HOST": os.environ.get("POSTGRES_HOST", ""),
+        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

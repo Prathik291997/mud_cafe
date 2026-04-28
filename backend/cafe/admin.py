@@ -3,6 +3,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from .models import (
     CafeTable,
+    Combo,
     EmailSubscriber,
     MenuItem,
     Offer,
@@ -44,4 +45,5 @@ admin.site.register(Payment)
 admin.site.register(Review)
 admin.site.register(EmailSubscriber)
 admin.site.register(Offer)
+admin.site.register(Combo)
 admin.site.register(StaffNotification)

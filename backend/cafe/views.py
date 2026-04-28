@@ -19,6 +19,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import (
     CafeTable,
+    Combo,
     EmailSubscriber,
     MenuItem,
     Offer,
@@ -141,6 +142,44 @@ class PublicMenuView(APIView):
                     }
                     for i in items
                 ]
+            }
+        )
+
+
+class PublicAnnouncementsView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        offers = (
+            Offer.objects.filter(active=True, released_at__isnull=False)
+            .order_by("-released_at", "-created_at")[:20]
+        )
+        combos = (
+            Combo.objects.filter(active=True, released_at__isnull=False)
+            .order_by("-released_at", "-created_at")[:20]
+        )
+        return Response(
+            {
+                "offers": [
+                    {
+                        "id": o.id,
+                        "title": o.title,
+                        "body": o.body,
+                        "releasedAt": o.released_at,
+                    }
+                    for o in offers
+                ],
+                "combos": [
+                    {
+                        "id": c.id,
+                        "title": c.title,
+                        "description": c.description,
+                        "originalPrice": str(c.original_price),
+                        "comboPrice": str(c.combo_price),
+                        "releasedAt": c.released_at,
+                    }
+                    for c in combos
+                ],
             }
         )
 
@@ -664,6 +703,28 @@ class AdminOffersView(APIView):
         return Response({"offer": {"id": o.id}})
 
 
+class AdminOfferDetailView(APIView):
+    permission_classes = [IsAdmin]
+
+    def patch(self, request, pk):
+        offer = Offer.objects.filter(id=pk).first()
+        if not offer:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        d = request.data or {}
+        if "title" in d:
+            offer.title = (d.get("title") or "").strip()
+        if "body" in d:
+            offer.body = (d.get("body") or "").strip()
+        if "active" in d:
+            offer.active = bool(d.get("active"))
+        offer.save()
+        return Response({"ok": True})
+
+    def delete(self, request, pk):
+        Offer.objects.filter(id=pk).delete()
+        return Response({"ok": True})
+
+
 class AdminOfferReleaseView(APIView):
     permission_classes = [IsAdmin]
 
@@ -684,6 +745,112 @@ class AdminOfferReleaseView(APIView):
                 send_mail(
                     subject=f"Mudcup offer: {offer.title}",
                     message=offer.body,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[em],
+                    fail_silently=True,
+                )
+            except Exception:
+                pass
+        return Response({"ok": True, "emailsQueued": len(subs)})
+
+
+class AdminCombosView(APIView):
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        combos = Combo.objects.all().order_by("-created_at")[:100]
+        return Response(
+            {
+                "combos": [
+                    {
+                        "id": c.id,
+                        "title": c.title,
+                        "description": c.description,
+                        "originalPrice": str(c.original_price),
+                        "comboPrice": str(c.combo_price),
+                        "active": c.active,
+                        "releasedAt": c.released_at,
+                    }
+                    for c in combos
+                ]
+            }
+        )
+
+    def post(self, request):
+        d = request.data or {}
+        title = (d.get("title") or "").strip()
+        description = (d.get("description") or "").strip()
+        original_price = d.get("originalPrice")
+        combo_price = d.get("comboPrice")
+        if not title or not description or original_price is None or combo_price is None:
+            return Response({"error": "Invalid body"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            op = Decimal(str(original_price))
+            cp = Decimal(str(combo_price))
+        except Exception:
+            return Response({"error": "Invalid prices"}, status=status.HTTP_400_BAD_REQUEST)
+        if op <= 0 or cp <= 0:
+            return Response({"error": "Prices must be positive"}, status=status.HTTP_400_BAD_REQUEST)
+        c = Combo.objects.create(
+            title=title,
+            description=description,
+            original_price=op,
+            combo_price=cp,
+            active=bool(d.get("active", True)),
+        )
+        return Response({"combo": {"id": c.id}})
+
+
+class AdminComboDetailView(APIView):
+    permission_classes = [IsAdmin]
+
+    def patch(self, request, pk):
+        c = Combo.objects.filter(id=pk).first()
+        if not c:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        d = request.data or {}
+        if "title" in d:
+            c.title = (d.get("title") or "").strip()
+        if "description" in d:
+            c.description = (d.get("description") or "").strip()
+        if "originalPrice" in d:
+            c.original_price = Decimal(str(d.get("originalPrice")))
+        if "comboPrice" in d:
+            c.combo_price = Decimal(str(d.get("comboPrice")))
+        if "active" in d:
+            c.active = bool(d.get("active"))
+        c.save()
+        return Response({"ok": True})
+
+    def delete(self, request, pk):
+        Combo.objects.filter(id=pk).delete()
+        return Response({"ok": True})
+
+
+class AdminComboAnnounceView(APIView):
+    permission_classes = [IsAdmin]
+
+    def post(self, request, pk):
+        c = Combo.objects.filter(id=pk).first()
+        if not c:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        from django.utils import timezone
+
+        c.released_at = timezone.now()
+        c.active = True
+        c.save()
+        notify_offer_released(title=f"Combo: {c.title}", body=c.description)
+
+        subs = list(EmailSubscriber.objects.values_list("email", flat=True))
+        message = (
+            f"{c.title}\n\n{c.description}\n\n"
+            f"Original: Rs {c.original_price}\nCombo: Rs {c.combo_price}"
+        )
+        for em in subs:
+            try:
+                send_mail(
+                    subject=f"Mudcup combo: {c.title}",
+                    message=message,
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=[em],
                     fail_silently=True,

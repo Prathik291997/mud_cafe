@@ -32,6 +32,16 @@ type PaymentRow = {
   orderStatus: string;
 };
 
+type ComboRow = {
+  id: number;
+  title: string;
+  description: string;
+  originalPrice: string;
+  comboPrice: string;
+  active: boolean;
+  releasedAt: string | null;
+};
+
 export function AdminDashboardPage() {
   const nav = useNavigate();
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -42,8 +52,10 @@ export function AdminDashboardPage() {
     { id: number; title: string; body: string; tableNumber: number | null; amount: string | null }[]
   >([]);
   const [offers, setOffers] = useState<{ id: number; title: string; body: string; releasedAt: string | null }[]>([]);
+  const [combos, setCombos] = useState<ComboRow[]>([]);
   const [form, setForm] = useState({ name: "", price: "", supplierName: "", description: "" });
   const [offerForm, setOfferForm] = useState({ title: "", body: "" });
+  const [comboForm, setComboForm] = useState({ title: "", description: "", originalPrice: "", comboPrice: "" });
   const [tables, setTables] = useState<AdminTableRow[]>([]);
   const [pubUrl, setPubUrl] = useState("");
   const [tableForm, setTableForm] = useState({ number: "", label: "" });
@@ -67,13 +79,14 @@ export function AdminDashboardPage() {
 
   const load = useCallback(async () => {
     if (!(await gate())) return;
-    const [m, s, p, n, o, tb] = await Promise.all([
+    const [m, s, p, n, o, tb, cb] = await Promise.all([
       apiFetch("/admin/menu/"),
       apiFetch(`/admin/stats/?period=${period}`),
       apiFetch(`/admin/payments/?period=${period}`),
       apiFetch("/notifications/staff/"),
       apiFetch("/admin/offers/"),
       apiFetch("/admin/tables/"),
+      apiFetch("/admin/combos/"),
     ]);
     if (m.ok) {
       const j = await m.json();
@@ -99,6 +112,10 @@ export function AdminDashboardPage() {
       const j = await tb.json();
       setTables(j.tables ?? []);
       setPubUrl(j.frontendPublicUrl ?? "");
+    }
+    if (cb.ok) {
+      const j = await cb.json();
+      setCombos(j.combos ?? []);
     }
   }, [gate, period]);
 
@@ -135,6 +152,32 @@ export function AdminDashboardPage() {
     void load();
   }
 
+  async function editMenuItem(item: MenuItem) {
+    const name = prompt("Menu item name", item.name);
+    if (name == null) return;
+    const priceRaw = prompt("Price", item.price);
+    if (priceRaw == null) return;
+    const price = Number(priceRaw);
+    if (!name.trim() || Number.isNaN(price) || price < 0) {
+      alert("Invalid menu values");
+      return;
+    }
+    const supplierName = prompt("Supplier (optional)", item.supplierName ?? "");
+    if (supplierName == null) return;
+    const description = prompt("Description (optional)", item.description ?? "");
+    if (description == null) return;
+    await apiFetch(`/admin/menu/${item.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: name.trim(),
+        price,
+        supplierName: supplierName.trim() || null,
+        description: description.trim() || null,
+      }),
+    });
+    void load();
+  }
+
   async function deleteItem(id: number) {
     if (!confirm("Delete this item?")) return;
     await apiFetch(`/admin/menu/${id}/`, { method: "DELETE" });
@@ -152,6 +195,91 @@ export function AdminDashboardPage() {
   async function releaseOffer(id: number) {
     if (!confirm("Release this offer to all subscribed emails?")) return;
     await apiFetch(`/admin/offers/${id}/release/`, { method: "POST" });
+    void load();
+  }
+
+  async function editOffer(offer: { id: number; title: string; body: string }) {
+    const title = prompt("Offer title", offer.title);
+    if (title == null) return;
+    const body = prompt("Offer details", offer.body);
+    if (body == null) return;
+    if (!title.trim() || !body.trim()) {
+      alert("Offer title and details are required.");
+      return;
+    }
+    await apiFetch(`/admin/offers/${offer.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ title: title.trim(), body: body.trim() }),
+    });
+    void load();
+  }
+
+  async function deleteOffer(id: number) {
+    if (!confirm("Delete this offer?")) return;
+    await apiFetch(`/admin/offers/${id}/`, { method: "DELETE" });
+    void load();
+  }
+
+  async function createCombo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!comboForm.title || !comboForm.description || !comboForm.originalPrice || !comboForm.comboPrice) return;
+    const originalPrice = Number(comboForm.originalPrice);
+    const comboPrice = Number(comboForm.comboPrice);
+    if (Number.isNaN(originalPrice) || Number.isNaN(comboPrice) || originalPrice <= 0 || comboPrice <= 0) return;
+    await apiFetch("/admin/combos/", {
+      method: "POST",
+      body: JSON.stringify({
+        title: comboForm.title,
+        description: comboForm.description,
+        originalPrice,
+        comboPrice,
+      }),
+    });
+    setComboForm({ title: "", description: "", originalPrice: "", comboPrice: "" });
+    void load();
+  }
+
+  async function toggleCombo(id: number, active: boolean) {
+    await apiFetch(`/admin/combos/${id}/`, { method: "PATCH", body: JSON.stringify({ active: !active }) });
+    void load();
+  }
+
+  async function editCombo(combo: ComboRow) {
+    const title = prompt("Combo title", combo.title);
+    if (title == null) return;
+    const description = prompt("Combo details", combo.description);
+    if (description == null) return;
+    const originalPriceRaw = prompt("Original price", combo.originalPrice);
+    if (originalPriceRaw == null) return;
+    const comboPriceRaw = prompt("Combo price", combo.comboPrice);
+    if (comboPriceRaw == null) return;
+    const originalPrice = Number(originalPriceRaw);
+    const comboPrice = Number(comboPriceRaw);
+    if (!title.trim() || !description.trim() || Number.isNaN(originalPrice) || Number.isNaN(comboPrice)) {
+      alert("Invalid combo values");
+      return;
+    }
+    await apiFetch(`/admin/combos/${combo.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        title: title.trim(),
+        description: description.trim(),
+        originalPrice,
+        comboPrice,
+      }),
+    });
+    void load();
+  }
+
+  async function deleteCombo(id: number) {
+    if (!confirm("Delete this combo?")) return;
+    await apiFetch(`/admin/combos/${id}/`, { method: "DELETE" });
+    void load();
+  }
+
+  async function announceCombo(id: number) {
+    if (!confirm("Announce this combo to all subscribed emails?")) return;
+    await apiFetch(`/admin/combos/${id}/announce/`, { method: "POST" });
     void load();
   }
 
@@ -393,6 +521,9 @@ export function AdminDashboardPage() {
                     <button type="button" className="linkish" onClick={() => void toggleItem(it.id, it.active)}>
                       {it.active ? "Hide" : "Show"}
                     </button>{" "}
+                    <button type="button" className="linkish" onClick={() => void editMenuItem(it)}>
+                      Edit
+                    </button>{" "}
                     <button type="button" className="linkish danger" onClick={() => void deleteItem(it.id)}>
                       Delete
                     </button>
@@ -456,8 +587,77 @@ export function AdminDashboardPage() {
             <li key={o.id} className="offer-item">
               <span className="strong">{o.title}</span>
               {o.releasedAt && <span className="badge">Released</span>}
+              <button type="button" className="linkish" onClick={() => void editOffer(o)}>
+                Edit
+              </button>
               <button type="button" className="linkish" onClick={() => void releaseOffer(o.id)}>
                 Release to emails
+              </button>
+              <button type="button" className="linkish danger" onClick={() => void deleteOffer(o.id)}>
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="section">
+        <h2>Combos</h2>
+        <p className="muted small">Create combo packs and announce them to subscribers.</p>
+        <form className="form" onSubmit={createCombo}>
+          <input
+            placeholder="Combo title"
+            value={comboForm.title}
+            onChange={(e) => setComboForm((f) => ({ ...f, title: e.target.value }))}
+          />
+          <textarea
+            placeholder="Combo details"
+            rows={3}
+            value={comboForm.description}
+            onChange={(e) => setComboForm((f) => ({ ...f, description: e.target.value }))}
+          />
+          <div className="grid-3">
+            <input
+              placeholder="Original price"
+              type="number"
+              min={0}
+              step="0.01"
+              value={comboForm.originalPrice}
+              onChange={(e) => setComboForm((f) => ({ ...f, originalPrice: e.target.value }))}
+            />
+            <input
+              placeholder="Combo price"
+              type="number"
+              min={0}
+              step="0.01"
+              value={comboForm.comboPrice}
+              onChange={(e) => setComboForm((f) => ({ ...f, comboPrice: e.target.value }))}
+            />
+            <button type="submit" className="btn btn-primary">
+              Save combo
+            </button>
+          </div>
+        </form>
+        <ul className="offer-list">
+          {combos.map((c) => (
+            <li key={c.id} className="offer-item">
+              <span className="strong">
+                {c.title} (Rs {c.comboPrice})
+              </span>
+              <span className="muted small">was Rs {c.originalPrice}</span>
+              {!c.active && <span className="badge">Hidden</span>}
+              {c.releasedAt && <span className="badge">Announced</span>}
+              <button type="button" className="linkish" onClick={() => void editCombo(c)}>
+                Edit
+              </button>
+              <button type="button" className="linkish" onClick={() => void toggleCombo(c.id, c.active)}>
+                {c.active ? "Hide" : "Show"}
+              </button>
+              <button type="button" className="linkish" onClick={() => void announceCombo(c.id)}>
+                Announce combo
+              </button>
+              <button type="button" className="linkish danger" onClick={() => void deleteCombo(c.id)}>
+                Delete
               </button>
             </li>
           ))}

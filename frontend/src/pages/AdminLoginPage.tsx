@@ -13,22 +13,32 @@ export function AdminLoginPage() {
     e.preventDefault();
     setErr(null);
     setLoading(true);
-    const res = await apiFetch("/auth/login/", { method: "POST", auth: false, body: JSON.stringify({ email, password }) });
-    setLoading(false);
-    if (!res.ok) {
-      setErr(await readApiError(res));
-      return;
+    try {
+      const res = await apiFetch("/auth/login/", { method: "POST", auth: false, body: JSON.stringify({ email, password }) });
+      if (!res.ok) {
+        setErr(await readApiError(res));
+        return;
+      }
+      const data = (await res.json()) as { access: string; refresh: string };
+      setTokens(data.access, data.refresh);
+      const me = await apiFetch("/auth/me/");
+      if (!me.ok) {
+        clearTokens();
+        setErr("Login succeeded but profile check failed. Verify API URL/CORS settings.");
+        return;
+      }
+      const mj = (await me.json()) as { user?: { role?: string } };
+      if (mj.user?.role !== "ADMIN") {
+        clearTokens();
+        setErr("This account is not an admin.");
+        return;
+      }
+      nav("/admin");
+    } catch {
+      setErr("Could not reach API server. Check VITE_API_URL and backend CORS.");
+    } finally {
+      setLoading(false);
     }
-    const data = (await res.json()) as { access: string; refresh: string };
-    setTokens(data.access, data.refresh);
-    const me = await apiFetch("/auth/me/");
-    const mj = (await me.json()) as { user?: { role?: string } };
-    if (mj.user?.role !== "ADMIN") {
-      clearTokens();
-      setErr("This account is not an admin.");
-      return;
-    }
-    nav("/admin");
   }
 
   return (

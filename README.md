@@ -14,7 +14,6 @@ cd backend
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -r requirements.txt
-copy .env.example .env          # optional
 python manage.py migrate
 python manage.py seed_demo
 python manage.py runserver 8000
@@ -30,6 +29,7 @@ API base: `http://127.0.0.1:8000/api/`
 | Role    | Email                 | Password   |
 |---------|----------------------|------------|
 | Admin   | `admin@mudcup.local` | `admin123` |
+| Owner   | `owner@mudcup.local` | `owner123` |
 | Manager | `manager@mudcup.local` | `manager123` |
 
 ### Customer flow (app)
@@ -50,7 +50,6 @@ In **Admin → Tables & QR codes** you can add tables (Table 1, 2, 3, …), **do
 ```bash
 cd frontend
 npm install
-copy .env.example .env          # optional; default API is http://127.0.0.1:8000/api
 npm run dev
 ```
 
