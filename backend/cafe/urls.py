@@ -9,6 +9,7 @@ urlpatterns = [
     path("auth/me/", views.MeView.as_view()),
     path("payment-config/", views.PaymentConfigView.as_view()),
     path("menu/", views.PublicMenuView.as_view()),
+    path("menu/<int:pk>/image/", views.MenuItemImageView.as_view()),
     path("announcements/", views.PublicAnnouncementsView.as_view()),
     path("tables/by-token/<slug:token>/", views.TableByTokenView.as_view()),
     path("orders/", views.CreateOrderView.as_view()),

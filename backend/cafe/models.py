@@ -67,6 +67,7 @@ class MenuItem(models.Model):
     description = models.TextField(blank=True, null=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     supplier_name = models.CharField(max_length=200, blank=True, null=True)
+    image = models.ImageField(upload_to="menu_items/", blank=True, null=True)
     active = models.BooleanField(default=True)
     sort_order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

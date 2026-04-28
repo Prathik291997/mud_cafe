@@ -9,7 +9,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.http import FileResponse, HttpResponse
 from rest_framework import exceptions, serializers, status
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -37,6 +37,12 @@ from .utils_notify import notify_eta_sent, notify_offer_released, notify_payment
 
 def _new_table_qr_slug(number: int) -> str:
     return f"table-{number}-{secrets.token_hex(6)}"
+
+
+def _menu_image_url(request, item: MenuItem) -> str | None:
+    if not item.image:
+        return None
+    return request.build_absolute_uri(f"/api/menu/{item.id}/image/")
 
 
 ORDER_STATUS_PENDING = "PENDING"
@@ -139,6 +145,7 @@ class PublicMenuView(APIView):
                         "description": i.description,
                         "price": str(i.price),
                         "supplierName": i.supplier_name,
+                        "imageUrl": _menu_image_url(request, i),
                     }
                     for i in items
                 ]
@@ -341,6 +348,7 @@ class PayOrderView(APIView):
 
 class AdminMenuListCreateView(APIView):
     permission_classes = [IsAdmin]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get(self, request):
         items = MenuItem.objects.all().order_by("sort_order", "name")
@@ -355,6 +363,7 @@ class AdminMenuListCreateView(APIView):
                         "supplierName": i.supplier_name,
                         "active": i.active,
                         "sortOrder": i.sort_order,
+                        "imageUrl": _menu_image_url(request, i),
                     }
                     for i in items
                 ]
@@ -372,6 +381,7 @@ class AdminMenuListCreateView(APIView):
             price=Decimal(str(price)),
             description=d.get("description"),
             supplier_name=d.get("supplierName"),
+            image=request.FILES.get("image") or request.FILES.get("file"),
             active=bool(d.get("active", True)),
             sort_order=int(d.get("sortOrder") or 0),
         )
@@ -380,6 +390,7 @@ class AdminMenuListCreateView(APIView):
 
 class AdminMenuDetailView(APIView):
     permission_classes = [IsAdmin]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def patch(self, request, pk):
         item = MenuItem.objects.filter(id=pk).first()
@@ -398,12 +409,37 @@ class AdminMenuDetailView(APIView):
             item.active = bool(d["active"])
         if "sortOrder" in d:
             item.sort_order = int(d["sortOrder"])
+        f = request.FILES.get("image") or request.FILES.get("file")
+        if f:
+            if item.image:
+                item.image.delete(save=False)
+            item.image = f
+        if d.get("clearImage"):
+            if item.image:
+                item.image.delete(save=False)
+            item.image = None
         item.save()
         return Response({"item": {"id": item.id, "price": str(item.price)}})
 
     def delete(self, request, pk):
+        item = MenuItem.objects.filter(id=pk).first()
+        if item and item.image:
+            item.image.delete(save=False)
         MenuItem.objects.filter(id=pk).delete()
         return Response({"ok": True})
+
+
+class MenuItemImageView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        item = MenuItem.objects.filter(id=pk, active=True).first()
+        if not item or not item.image:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            return FileResponse(item.image.open("rb"), content_type="image/*")
+        except OSError:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 class AdminOrdersView(APIView):
