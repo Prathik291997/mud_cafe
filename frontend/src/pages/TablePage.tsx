@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { Link, useParams } from "react-router-dom";
-import QRCode from "react-qr-code";
+import QRCodeImport from "react-qr-code";
 import { apiFetch } from "../lib/api";
 import { buildUpiPayUri } from "../lib/upi";
+
+const QRCode =
+  ((QRCodeImport as unknown as { default?: ComponentType<{ value: string; size: number; level?: string }> }).default ??
+    (QRCodeImport as unknown as ComponentType<{ value: string; size: number; level?: string }>));
 
 type MenuItem = {
   id: number;

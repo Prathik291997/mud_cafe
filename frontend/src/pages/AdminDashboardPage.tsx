@@ -202,7 +202,12 @@ export function AdminDashboardPage() {
 
   async function deleteItem(id: number) {
     if (!confirm("Delete this item?")) return;
-    await apiFetch(`/admin/menu/${id}/`, { method: "DELETE" });
+    const res = await apiFetch(`/admin/menu/${id}/`, { method: "DELETE" });
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(j.error ?? "Could not delete menu item");
+      return;
+    }
     void load();
   }
 

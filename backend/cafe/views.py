@@ -2,6 +2,7 @@ from decimal import Decimal
 import mimetypes
 import secrets
 
+from django.db.models.deletion import ProtectedError
 from django.db import transaction
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
@@ -423,9 +424,19 @@ class AdminMenuDetailView(APIView):
 
     def delete(self, request, pk):
         item = MenuItem.objects.filter(id=pk).first()
-        if item and item.image:
-            item.image.delete(save=False)
-        MenuItem.objects.filter(id=pk).delete()
+        if not item:
+            return Response({"ok": True})
+        try:
+            if item.image:
+                item.image.delete(save=False)
+            item.delete()
+        except ProtectedError:
+            return Response(
+                {
+                    "error": "This menu item is used in existing orders. Set it inactive instead of deleting.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response({"ok": True})
 
 
@@ -827,13 +838,24 @@ class AdminCombosView(APIView):
             return Response({"error": "Invalid prices"}, status=status.HTTP_400_BAD_REQUEST)
         if op <= 0 or cp <= 0:
             return Response({"error": "Prices must be positive"}, status=status.HTTP_400_BAD_REQUEST)
-        c = Combo.objects.create(
-            title=title,
-            description=description,
-            original_price=op,
-            combo_price=cp,
-            active=bool(d.get("active", True)),
-        )
+        combo_active = bool(d.get("active", True))
+        with transaction.atomic():
+            menu_item = MenuItem.objects.create(
+                name=f"Combo: {title}",
+                description=description,
+                price=cp,
+                supplier_name="Combo Offer",
+                active=combo_active,
+                sort_order=-50,
+            )
+            c = Combo.objects.create(
+                title=title,
+                description=description,
+                original_price=op,
+                combo_price=cp,
+                menu_item=menu_item,
+                active=combo_active,
+            )
         return Response({"combo": {"id": c.id}})
 
 
@@ -845,21 +867,59 @@ class AdminComboDetailView(APIView):
         if not c:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
         d = request.data or {}
+        title_changed = False
+        description_changed = False
+        combo_price_changed = False
+        active_changed = False
         if "title" in d:
             c.title = (d.get("title") or "").strip()
+            title_changed = True
         if "description" in d:
             c.description = (d.get("description") or "").strip()
+            description_changed = True
         if "originalPrice" in d:
             c.original_price = Decimal(str(d.get("originalPrice")))
         if "comboPrice" in d:
             c.combo_price = Decimal(str(d.get("comboPrice")))
+            combo_price_changed = True
         if "active" in d:
             c.active = bool(d.get("active"))
+            active_changed = True
+
+        menu_item = c.menu_item
+        if menu_item is None:
+            menu_item = MenuItem.objects.create(
+                name=f"Combo: {c.title}",
+                description=c.description,
+                price=c.combo_price,
+                supplier_name="Combo Offer",
+                active=c.active,
+                sort_order=-50,
+            )
+            c.menu_item = menu_item
+
+        if title_changed:
+            menu_item.name = f"Combo: {c.title}"
+        if description_changed:
+            menu_item.description = c.description
+        if combo_price_changed:
+            menu_item.price = c.combo_price
+        if active_changed:
+            menu_item.active = c.active
+        if title_changed or description_changed or combo_price_changed or active_changed:
+            menu_item.save()
+
         c.save()
         return Response({"ok": True})
 
     def delete(self, request, pk):
-        Combo.objects.filter(id=pk).delete()
+        c = Combo.objects.filter(id=pk).select_related("menu_item").first()
+        if not c:
+            return Response({"ok": True})
+        m = c.menu_item
+        c.delete()
+        if m:
+            m.delete()
         return Response({"ok": True})
 
 
